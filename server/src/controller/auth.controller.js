@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import {
     createAccessToken,
     createRefreshToken,
-    readRefreshToken
+    readRefreshToken,
 } from "../utils/auth.utils.js";
 
 export async function register(req, res) {
@@ -17,10 +17,10 @@ export async function register(req, res) {
         return res.status(400).json({
             message: 'User already exists',
             errors: [{
-                feild: 'email',
-                msg: 'User already exists',
-            }]
-        })
+                field: "email",
+                msg: "User already exists",
+            }],
+        });
     }
 
     const user = await usermodel.create({
@@ -65,7 +65,7 @@ export async function register(req, res) {
 export async function login(req, res) {
     const { email, password } = req.body;
 
-    const user = await userModel.findOne({
+    const user = await usermodel.findOne({
         email
     })
 
@@ -93,7 +93,7 @@ export async function login(req, res) {
         role: user.role
     })
 
-    await userModel.findOneAndUpdate({
+    await usermodel.findOneAndUpdate({
         email
     }, {
         refreshToken
@@ -121,58 +121,53 @@ export async function refresh(req, res) {
 
     if (!refreshToken) {
         return res.status(401).json({
-            message: 'Refresh token is required'
-        })
+            message: "Refresh token is required",
+        });
     }
 
+    let decoded;
     try {
-        const decoded = readRefreshToken(refreshToken);
-
-        const { userId, role } = decoded;
-
-        user = await userModel.findById(userId);
-
-        if(!refreshToken !== user.refreshToken){
-            await userModel.findByIdAndUpdate(user._id,{
-                refreshToken: null
-            })
-
-            return res.status(401).json({
-                message: 'refresh token mismatch'
-            })
-        }
-        
-        const accessToken = createAccessToken({
-            userId, role
-        })
-
-        const newRefreshToken = createRefreshToken({
-            userId, role
-        })
-
-        await userModel.findByIdAndUpdate(user._id,{
-            refreshToken: newRefreshToken
-        })
-
-        res.cookie('refreshToken', newRefreshToken,{
-            httpOnly: true
-        })
-
-        res.status(200).json({
-            message: 'Token rotated successfully',
-            data:{
-                user:{
-                    email: user.email,
-                    name: user.name,
-                    id: user._id,
-                },
-                accessToken
-            }
-        })
-
-    } catch (err) {
+        decoded = readRefreshToken(refreshToken);
+    } catch {
         return res.status(401).json({
-            message: 'Invalid refresh token'
-        })
+            message: "Invalid or expired refresh token",
+        });
     }
+
+    const user = await usermodel.findById(decoded.userId);
+
+    if (!user || user.refreshToken !== refreshToken) {
+        return res.status(401).json({
+            message: "Refresh token mismatch",
+        });
+    }
+
+    const accessToken = createAccessToken({
+        userId: user._id,
+        role: user.role,
+    });
+    const newRefreshToken = createRefreshToken({
+        userId: user._id,
+        role: user.role,
+    });
+
+    await usermodel.findByIdAndUpdate(user._id, {
+        refreshToken: newRefreshToken,
+    });
+
+    res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+    });
+
+    return res.status(200).json({
+        message: "Token rotated successfully",
+        data: {
+            user: {
+                email: user.email,
+                name: user.name,
+                id: user._id,
+            },
+            accessToken,
+        },
+    });
 }
