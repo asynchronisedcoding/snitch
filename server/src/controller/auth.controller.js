@@ -1,0 +1,113 @@
+import usermodel from "../models/user.model.js";
+import bcrypt from "bcryptjs";
+import { createAccessToken, createRefreshToken } from "../utils/auth.utils.js";
+
+export async function register(req, res) {
+    const { email, name, password } = req.body;
+
+    const isUserAlreadyExist = await usermodel.findOne({
+        email
+    })
+
+    if (isUserAlreadyExist) {
+        return res.status(400).json({
+            message: 'User already exists',
+            errors: [{
+                feild: 'email',
+                msg: 'User already exists',
+            }]
+        })
+    }
+
+    const user = await usermodel.create({
+        email,
+        name,
+        passwordHash: await bcrypt.hash(password, 12)
+    })
+
+    const accessToken = createAccessToken({
+        userId: user._id,
+        role: user.role
+    })
+
+    const refreshToken = createRefreshToken({
+        userId: user._id,
+        role: user.role
+    })
+
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+    })
+
+
+    await usermodel.findByIdAndUpdate(user._id, {
+        refreshToken
+    })
+
+    res.status(201).json({
+        message: 'User created successfully',
+        data: {
+            user: {
+                email: user.email,
+                name: user.name,
+                id: user._id,
+            },
+            accessToken
+        }
+    })
+}
+
+export async function login(req, res) {
+    const { email, password } = req.body;
+
+    const user = await userModel.findOne({
+        email
+    })
+
+    if (!user) {
+        return res.status(400).json({
+            message: 'invalid email or password'
+        })
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if(!isPasswordValid){
+        res.status(400).json({
+            message: 'invalid email or password'
+        })
+    }
+
+    const accessToken = createAccessToken({
+        userId: user._id,
+        role: user.role
+    })
+
+    const refreshToken = createRefreshToken({
+        userId: user._id,
+        role: user.role
+    })
+
+    await userModel.findOneAndUpdate({
+        email
+    },{
+        refreshToken
+    })
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+    })
+
+    res.status(200).json({
+        message: 'User logged in successfully',
+        data:{
+            user:{
+                id: user._id,
+                email: user.email,
+                name: user.name,
+            },
+            accessToken
+        }
+    })
+}
