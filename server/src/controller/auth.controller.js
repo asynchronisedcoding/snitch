@@ -124,7 +124,6 @@ export async function refresh(req, res) {
             message: "Refresh token is required",
         });
     }
-
     let decoded;
     try {
         decoded = readRefreshToken(refreshToken);
@@ -136,7 +135,7 @@ export async function refresh(req, res) {
 
     const user = await usermodel.findById(decoded.userId);
 
-    if (!user || user.refreshToken !== refreshToken) {
+    if (refreshToken != user.refreshToken) {
         return res.status(401).json({
             message: "Refresh token mismatch",
         });
@@ -170,4 +169,20 @@ export async function refresh(req, res) {
             accessToken,
         },
     });
+}
+
+export async function getMe(req, res) {
+    const { userId, role } = req.user;
+
+    const user = await usermodel.findById(userId);
+    res.status(200).json({
+        message: 'User fetched successfully',
+        data:{
+            user:{
+                email: user.email,
+                name: user.name,
+                id: user._id,
+            }
+        }
+    })
 }
